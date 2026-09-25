@@ -3,7 +3,7 @@ import { api } from '../lib/api'
 import { useResource } from '../lib/useResource'
 import { formatDateTime } from '../lib/format'
 import { CMS_SOURCE } from '../lib/constants'
-import { ExternalLinkIcon } from './icons'
+import { ChevronDownIcon, ExternalLinkIcon } from './icons'
 import { ExperienceCell } from './JobRequirements'
 import type { Job } from '../types'
 
@@ -12,6 +12,16 @@ const COLLAPSED_COUNT = 5
 const STATUSES = ['new', 'reviewing', 'applied', 'skipped'] as const
 /** Marking a posting as either of these takes it off the alert list — it no longer needs action. */
 const RESOLVED = new Set<string>(['applied', 'skipped'])
+/** Shared by the Jobs and CMS pages, so collapsing it on one collapses it on both. */
+const COLLAPSED_KEY = 'deadlineAlerts.collapsed'
+
+function readCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(COLLAPSED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 /**
  * Deadlines are naive UTC ("2026-09-30T05:00:00") or date-only. A date-only deadline is treated as the
@@ -52,6 +62,18 @@ export function DeadlineAlerts({ onJobUpdated }: { onJobUpdated?: (job: Job) => 
   const fetcher = useCallback(() => api.jobs.deadlines(WINDOW_DAYS), [])
   const { state, reload, setState } = useResource(fetcher)
   const [showAll, setShowAll] = useState(false)
+  const [collapsed, setCollapsed] = useState(readCollapsed)
+
+  const toggleCollapsed = () =>
+    setCollapsed((current) => {
+      const next = !current
+      try {
+        window.localStorage.setItem(COLLAPSED_KEY, next ? '1' : '0')
+      } catch {
+        // Private-mode storage failures shouldn't break the toggle.
+      }
+      return next
+    })
 
   if (state.status === 'loading') return <div className="mb-4 h-12 animate-pulse rounded-md bg-panel" role="status" aria-label="Loading deadlines" />
   if (state.status === 'error') {
@@ -93,14 +115,26 @@ export function DeadlineAlerts({ onJobUpdated }: { onJobUpdated?: (job: Job) => 
 
   return (
     <section className="mb-4 rounded-md border border-border" aria-labelledby="deadline-alerts-heading">
-      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border bg-panel px-3 py-2">
+      <div className={`flex flex-wrap items-center justify-between gap-2 bg-panel px-3 py-2 ${collapsed ? 'rounded-md' : 'border-b border-border'}`}>
         <h2 id="deadline-alerts-heading" className="text-sm font-semibold text-text">
-          Closing in the next {WINDOW_DAYS} days
-          <span className="ml-2 font-mono font-normal text-text-secondary">{upcoming.length}</span>
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            aria-expanded={!collapsed}
+            aria-controls="deadline-alerts-list"
+            className="flex items-center gap-1.5 rounded-sm focus-visible:outline-2 focus-visible:outline-accent"
+          >
+            <ChevronDownIcon className={`transition-transform ${collapsed ? '-rotate-90' : ''}`} />
+            Closing in the next {WINDOW_DAYS} days
+            <span className="font-mono font-normal text-text-secondary">{upcoming.length}</span>
+          </button>
         </h2>
+        {/* Stays visible while collapsed, so an urgent deadline is never fully hidden. */}
         {urgent > 0 && <span className="text-xs text-danger">{urgent} due today or tomorrow</span>}
       </div>
-      <ul>
+      {!collapsed && (
+      <>
+      <ul id="deadline-alerts-list">
         {shown.map(({ job, due, days }) => {
           const score = job.match_score ?? job.ranking_score
           return (
@@ -163,6 +197,8 @@ export function DeadlineAlerts({ onJobUpdated }: { onJobUpdated?: (job: Job) => 
         >
           {showAll ? 'Show fewer' : `Show all ${upcoming.length}`}
         </button>
+      )}
+      </>
       )}
     </section>
   )
