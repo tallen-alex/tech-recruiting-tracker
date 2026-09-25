@@ -1,4 +1,4 @@
-import type { Application, Company, Contact, Job, PaginatedJobs, Profile, ScrapeRun, TargetingProfile } from '../types'
+import type { Application, Company, Contact, Job, PaginatedJobs, Profile, ScrapeRun, TargetingProfile, UpcomingDeadlines } from '../types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
@@ -22,6 +22,7 @@ export const api = {
     },
     update: (id: number, patch: Partial<Job>) =>
       request<Job>(`/jobs/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+    deadlines: (days = 7) => request<UpcomingDeadlines>(`/jobs/deadlines?days=${days}`),
   },
   applications: {
     list: () => request<Application[]>('/applications'),

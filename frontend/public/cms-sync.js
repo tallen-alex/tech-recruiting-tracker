@@ -42,6 +42,26 @@
   }
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
+  /**
+   * Posting HTML → plain text that keeps its shape: list items become "- " lines and block elements
+   * become line breaks, so the tracker can find the qualifications list. Entities are decoded through a
+   * detached <textarea>, which parses text only and never runs or loads anything.
+   */
+  const decoder = document.createElement('textarea')
+  function htmlToText(html) {
+    const marked = String(html || '')
+      .replace(/<\s*li[^>]*>/gi, '\n- ')
+      .replace(/<\s*(?:br|\/?p|\/?div|\/li|\/?ul|\/?ol|\/?h[1-6]|\/?tr)\b[^>]*>/gi, '\n')
+      .replace(/<[^>]*>/g, ' ')
+    decoder.innerHTML = marked
+    return decoder.value
+      .replace(/\u00a0/g, ' ')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/ *\n */g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+  }
+
   const boardOrigin = location.origin
   const deepLink = (id) => `${boardOrigin}/jobPostings#/jobPostings/${id}`
 
@@ -141,10 +161,9 @@
         })
         if (!res.ok) continue
         const d = await res.json()
-        const html = d.Description || ''
         details.push({
           externalId: String(externalId),
-          description: html.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim() || null,
+          description: htmlToText(d.Description) || null,
           salaryMin: d.SalaryMin ?? null,
           salaryMax: d.SalaryMax ?? null,
           applyUrl: d.Url || null,

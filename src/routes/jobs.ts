@@ -1,7 +1,34 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
+import { extractJobRequirements } from '../requirements'
 
 const jobs = new Hono<{ Bindings: Bindings }>()
+
+/** Requirements are derived on read so every source — and every existing row — gets them without a backfill. */
+function withRequirements<T extends { description?: unknown }>(row: T) {
+  return { ...row, ...extractJobRequirements(typeof row.description === 'string' ? row.description : null) }
+}
+
+/**
+ * Active postings closing within the window, soonest first. Anything already marked applied or skipped
+ * is left out — the point is what still needs action.
+ * Deadlines are stored as naive UTC ("2026-09-30T05:00:00") or date-only; datetime() normalizes both for
+ * comparison. The window starts a day back so a date-only deadline stays listed through its whole day —
+ * the client does the exact local-time cut.
+ */
+jobs.get('/deadlines', async (c) => {
+  const days = Math.min(30, Math.max(1, Number(c.req.query('days')) || 7))
+  const { results } = await c.env.DB.prepare(
+    `SELECT * FROM jobs
+     WHERE is_active = 1 AND deadline IS NOT NULL AND COALESCE(status, 'new') NOT IN ('applied', 'skipped')
+       AND datetime(deadline) >= datetime('now', '-1 day') AND datetime(deadline) <= datetime('now', ?)
+     ORDER BY datetime(deadline) ASC, COALESCE(match_score, ranking_score, -1) DESC
+     LIMIT 100`,
+  )
+    .bind(`+${days} days`)
+    .all<Record<string, unknown>>()
+  return c.json({ days, items: results.map(withRequirements) })
+})
 
 jobs.get('/', async (c) => {
   const active = c.req.query('active') ?? 'true'
@@ -57,8 +84,8 @@ jobs.get('/', async (c) => {
     : 'ORDER BY COALESCE(match_score, ranking_score, -1) DESC, COALESCE(posted_at, scraped_at) DESC'
   const count = await c.env.DB.prepare(`SELECT COUNT(*) AS total FROM jobs ${whereSql}`).bind(...params).first<{ total: number }>()
   const { results } = await c.env.DB.prepare(`SELECT * FROM jobs ${whereSql} ${orderSql} LIMIT ? OFFSET ?`)
-    .bind(...params, pageSize, (page - 1) * pageSize).all()
-  return c.json({ items: results, page, pageSize, total: count?.total ?? 0 })
+    .bind(...params, pageSize, (page - 1) * pageSize).all<Record<string, unknown>>()
+  return c.json({ items: results.map(withRequirements), page, pageSize, total: count?.total ?? 0 })
 })
 
 jobs.patch('/:id', async (c) => {

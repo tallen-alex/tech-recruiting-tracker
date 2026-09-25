@@ -30,6 +30,16 @@ export interface Job {
   sponsorship_evidence: string | null
   status: string
   created_at: string
+  /** Derived server-side from the description on every read; empty when no qualifications section is found. */
+  requirements: string[]
+  experience: ExperienceRequirement | null
+}
+
+export type ExperienceRequirement = {
+  min: number
+  max: number | null
+  /** The phrase the number came from, shown so the figure can be checked. */
+  evidence: string
 }
 
 export interface Application {
@@ -107,6 +117,8 @@ export type TargetingProfile = {
 }
 
 export type PaginatedJobs = { items: Job[]; page: number; pageSize: number; total: number }
+
+export type UpcomingDeadlines = { days: number; items: Job[] }
 
 export type ScrapeRunCompany = {
   company_id: number

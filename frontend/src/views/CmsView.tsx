@@ -1,9 +1,11 @@
-import { useCallback, useState } from 'react'
+import { Fragment, useCallback, useState } from 'react'
 import { api } from '../lib/api'
 import { useResource } from '../lib/useResource'
 import { EmptyState } from '../components/EmptyState'
 import { ChevronDownIcon, ExternalLinkIcon } from '../components/icons'
 import { StatusDot, type Tone } from '../components/StatusBadge'
+import { DeadlineAlerts } from '../components/DeadlineAlerts'
+import { ExperienceCell, RequirementsRow, RequirementsToggle } from '../components/JobRequirements'
 import { formatDate } from '../lib/format'
 import { CMS_SOURCE } from '../lib/constants'
 import type { Job } from '../types'
@@ -65,6 +67,21 @@ export function CmsView() {
     [sortBy, page, sponsorship],
   )
   const { state, reload, setState } = useResource(fetcher)
+  const [expanded, setExpanded] = useState<Set<number>>(() => new Set())
+  const toggleExpanded = (id: number) =>
+    setExpanded((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const mirrorJob = (job: Job) =>
+    setState((previous) =>
+      previous.status === 'ready'
+        ? { status: 'ready', data: { ...previous.data, items: previous.data.items.map((item) => (item.id === job.id ? { ...item, status: job.status } : item)) } }
+        : previous,
+    )
 
   const setStatus = async (job: Job, status: string) => {
     setState((previous) =>
@@ -183,6 +200,8 @@ export function CmsView() {
         )}
       </section>
 
+      <DeadlineAlerts onJobUpdated={mirrorJob} />
+
       {state.status === 'loading' && (
         <div className="animate-pulse space-y-1.5" role="status" aria-label="Loading">
           {Array.from({ length: 6 }).map((_, index) => (
@@ -210,12 +229,13 @@ export function CmsView() {
       {state.status === 'ready' && state.data.items.length > 0 && (
         <>
           <div className="overflow-x-auto rounded-md border border-border">
-            <table className="w-full min-w-[1040px] border-collapse text-left text-sm">
+            <table className="w-full min-w-[1120px] border-collapse text-left text-sm">
               <thead>
                 <tr className="border-b border-border bg-panel text-xs uppercase tracking-wide text-text-faint">
                   <th className="px-3 py-2 font-medium">Company</th>
                   <th className="px-3 py-2 font-medium">Title</th>
                   <th className="px-3 py-2 font-medium">Location</th>
+                  <th className="px-3 py-2 font-medium">Experience</th>
                   <th className="px-3 py-2 font-medium">Sponsorship</th>
                   <th className="px-3 py-2 text-right font-medium">Match</th>
                   <th className="px-3 py-2 font-medium">Posted</th>
@@ -228,8 +248,10 @@ export function CmsView() {
                 {state.data.items.map((job) => {
                   const score = job.match_score ?? job.ranking_score
                   const reason = job.match_reason ?? job.ranking_reason
+                  const open = expanded.has(job.id)
                   return (
-                    <tr key={job.id} className="border-b border-border align-top transition-colors last:border-0 hover:bg-panel">
+                    <Fragment key={job.id}>
+                    <tr className={`border-b border-border align-top transition-colors last:border-0 hover:bg-panel ${open ? 'bg-panel' : ''}`}>
                       <td className="px-3 py-3 font-medium text-text">
                         <span className="flex items-center gap-2">
                           {job.company_logo_url && (
@@ -255,9 +277,13 @@ export function CmsView() {
                         <span className="line-clamp-2 font-medium leading-5" title={job.title}>
                           {job.title}
                         </span>
+                        <RequirementsToggle job={job} open={open} onToggle={() => toggleExpanded(job.id)} />
                       </td>
                       <td className="px-3 py-3 leading-5 text-text-secondary">
                         <span className="line-clamp-2">{job.location ?? '—'}</span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <ExperienceCell experience={job.experience} />
                       </td>
                       <td className="px-3 py-3">
                         {(() => {
@@ -313,6 +339,8 @@ export function CmsView() {
                         )}
                       </td>
                     </tr>
+                    {open && <RequirementsRow job={job} colSpan={10} />}
+                    </Fragment>
                   )
                 })}
               </tbody>
