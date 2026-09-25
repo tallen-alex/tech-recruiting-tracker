@@ -42,6 +42,7 @@ export interface Application {
   last_update: string
   resume_version: string | null
   referral: string | null
+  applied_email: string | null
   notes: string | null
   created_at: string
 }

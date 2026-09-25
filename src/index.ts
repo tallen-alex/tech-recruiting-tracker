@@ -16,7 +16,7 @@ app.route(
     table: 'applications',
     orderBy: 'last_update DESC',
     touchColumn: 'last_update',
-    writableColumns: ['job_id', 'company_name', 'title', 'status', 'applied_date', 'resume_version', 'referral', 'notes'],
+    writableColumns: ['job_id', 'company_name', 'title', 'status', 'applied_date', 'resume_version', 'referral', 'applied_email', 'notes'],
   }),
 )
 

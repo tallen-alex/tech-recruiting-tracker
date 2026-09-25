@@ -79,6 +79,7 @@ CREATE TABLE applications (
   last_update TEXT DEFAULT (datetime('now')),
   resume_version TEXT,
   referral TEXT,
+  applied_email TEXT,
   notes TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
