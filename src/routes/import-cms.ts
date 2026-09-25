@@ -20,6 +20,10 @@ export const CMS_SOURCE = 'cms-12twenty'
 const DETAIL_BUDGET = 60
 const LLM_BATCH_SIZE = 10
 const MAX_LLM_BATCHES = 6
+/** Postings per lookup query — each binds two params, and D1 allows 100 bound params per statement. */
+const LOOKUP_CHUNK = 45
+/** Statements per D1 batch call. */
+const WRITE_BATCH = 100
 
 const ALLOWED_ORIGIN = /^https:\/\/[a-z0-9-]+\.12twenty\.com$/i
 
@@ -89,56 +93,89 @@ importCms.post('/listings', async (c) => {
   const listings: IncomingListing[] = Array.isArray(body?.listings) ? body.listings : []
   if (listings.length === 0) return c.json({ error: 'expected a non-empty "listings" array' }, 400)
 
-  const targeting = await effectiveTargeting(c.env.DB)
-  let created = 0
-  let updated = 0
-
+  // A Worker request may make at most 1,000 D1 calls, and the board lists hundreds of postings, so this
+  // must not do per-posting round trips: rows are ranked in memory, looked up in chunks, and written in batches.
+  // Keyed by URL (the jobs table's unique column) so duplicates within one sync collapse to the last copy.
+  const rows = new Map<string, {
+    externalId: string
+    title: string
+    url: string
+    companyName: string
+    logoUrl: string | null
+    location: string | null
+    postedAt: string | null
+    deadline: string | null
+  }>()
   for (const listing of listings) {
     const title = typeof listing.title === 'string' ? listing.title.trim() : ''
     const url = typeof listing.url === 'string' ? listing.url.trim() : ''
     const externalId = typeof listing.externalId === 'string' ? listing.externalId : String(listing.externalId ?? '')
     if (!title || !url || !externalId) continue
-
-    const companyName = (listing.companyName ?? '').trim() || 'Unknown'
-    const logoUrl = safeLogoUrl(listing.logoUrl)
-    const existing = await c.env.DB.prepare(
-      'SELECT id FROM jobs WHERE (source = ? AND external_id = ?) OR url = ? LIMIT 1',
-    )
-      .bind(CMS_SOURCE, externalId, url)
-      .first<{ id: number }>()
-
-    if (existing) {
-      await c.env.DB.prepare(
-        `UPDATE jobs SET company_name = ?, title = ?, location = ?, url = ?, posted_at = ?, deadline = ?,
-         company_logo_url = COALESCE(?, company_logo_url), last_seen_at = datetime('now'), is_active = 1 WHERE id = ?`,
-      )
-        .bind(companyName, title, listing.location ?? null, url, listing.postedAt ?? null, listing.deadline ?? null, logoUrl, existing.id)
-        .run()
-      updated++
-      await rankAndPersist(c.env.DB, targeting, existing.id, {
-        title,
-        location: listing.location ?? null,
-        description: null,
-        remote: null,
-      })
-      continue
-    }
-
-    const inserted = await c.env.DB.prepare(
-      `INSERT INTO jobs (company_name, company_logo_url, title, location, url, source, external_id, posted_at, deadline,
-       first_seen_at, last_seen_at, is_active, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), 1, 'new') RETURNING id`,
-    )
-      .bind(companyName, logoUrl, title, listing.location ?? null, url, CMS_SOURCE, externalId, listing.postedAt ?? null, listing.deadline ?? null)
-      .first<{ id: number }>()
-    if (!inserted) continue
-    created++
-    await rankAndPersist(c.env.DB, targeting, inserted.id, {
+    rows.set(url, {
+      externalId,
       title,
+      url,
+      companyName: (listing.companyName ?? '').trim() || 'Unknown',
+      logoUrl: safeLogoUrl(listing.logoUrl),
       location: listing.location ?? null,
-      description: null,
-      remote: null,
+      postedAt: listing.postedAt ?? null,
+      deadline: listing.deadline ?? null,
     })
+  }
+  const incoming = [...rows.values()]
+
+  const existingByExternalId = new Map<string, number>()
+  const existingByUrl = new Map<string, number>()
+  for (let index = 0; index < incoming.length; index += LOOKUP_CHUNK) {
+    const chunk = incoming.slice(index, index + LOOKUP_CHUNK)
+    const placeholders = chunk.map(() => '?').join(', ')
+    const { results } = await c.env.DB.prepare(
+      `SELECT id, external_id, url FROM jobs WHERE (source = ? AND external_id IN (${placeholders})) OR url IN (${placeholders})`,
+    )
+      .bind(CMS_SOURCE, ...chunk.map((row) => row.externalId), ...chunk.map((row) => row.url))
+      .all<{ id: number; external_id: string | null; url: string | null }>()
+    for (const row of results) {
+      if (row.external_id) existingByExternalId.set(row.external_id, row.id)
+      if (row.url) existingByUrl.set(row.url, row.id)
+    }
+  }
+
+  const targeting = await effectiveTargeting(c.env.DB)
+  const statements: D1PreparedStatement[] = []
+  let created = 0
+  let updated = 0
+
+  for (const row of incoming) {
+    // Phase 1 ranks on title alone; /details re-ranks once the description lands.
+    const { score, reason } = scoreDeterministicJob(
+      targeting,
+      { title: row.title, location: row.location, description: null, remote: null },
+      { ignoreLocation: true },
+    )
+    const existingId = existingByExternalId.get(row.externalId) ?? existingByUrl.get(row.url)
+    if (existingId !== undefined) {
+      statements.push(
+        c.env.DB.prepare(
+          `UPDATE jobs SET company_name = ?, title = ?, location = ?, url = ?, posted_at = ?, deadline = ?,
+           company_logo_url = COALESCE(?, company_logo_url), last_seen_at = datetime('now'), is_active = 1,
+           ranking_score = ?, ranking_reason = ? WHERE id = ?`,
+        ).bind(row.companyName, row.title, row.location, row.url, row.postedAt, row.deadline, row.logoUrl, score, reason, existingId),
+      )
+      updated++
+    } else {
+      statements.push(
+        c.env.DB.prepare(
+          `INSERT INTO jobs (company_name, company_logo_url, title, location, url, source, external_id, posted_at, deadline,
+           first_seen_at, last_seen_at, is_active, status, ranking_score, ranking_reason)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), 1, 'new', ?, ?)`,
+        ).bind(row.companyName, row.logoUrl, row.title, row.location, row.url, CMS_SOURCE, row.externalId, row.postedAt, row.deadline, score, reason),
+      )
+      created++
+    }
+  }
+
+  for (let index = 0; index < statements.length; index += WRITE_BATCH) {
+    await c.env.DB.batch(statements.slice(index, index + WRITE_BATCH))
   }
 
   // Only the best-ranked postings still missing a description earn a detail fetch.
