@@ -5,6 +5,7 @@ import profileRoutes from './routes/profile'
 import scrapeRoutes from './routes/scrape'
 import companiesRoutes from './routes/companies'
 import jobsRoutes from './routes/jobs'
+import importCmsRoutes from './routes/import-cms'
 
 const app = new Hono<{ Bindings: Bindings }>()
 
@@ -44,6 +45,7 @@ app.route('/api/companies', companiesRoutes)
 
 app.route('/api/profile', profileRoutes)
 app.route('/api/scrape', scrapeRoutes)
+app.route('/api/import/cms', importCmsRoutes)
 
 app.get('*', (c) => c.env.ASSETS.fetch(c.req.raw))
 

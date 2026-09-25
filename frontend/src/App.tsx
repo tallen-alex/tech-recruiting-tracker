@@ -3,9 +3,11 @@ import { JobsView } from './views/JobsView'
 import { ApplicationsView } from './views/ApplicationsView'
 import { NetworkingView } from './views/NetworkingView'
 import { ProfileView } from './views/ProfileView'
+import { CmsView } from './views/CmsView'
 
 const TABS = [
   { id: 'jobs', label: 'Jobs' },
+  { id: 'cms', label: 'CMS' },
   { id: 'applications', label: 'Applications' },
   { id: 'networking', label: 'Networking' },
   { id: 'profile', label: 'Profile' },
@@ -48,8 +50,9 @@ function App() {
         </div>
       </header>
 
-      <main className={`mx-auto px-4 py-6 sm:px-6 ${tab === 'jobs' ? 'max-w-[90rem]' : 'max-w-6xl'}`}>
+      <main className={`mx-auto px-4 py-6 sm:px-6 ${tab === 'jobs' || tab === 'cms' ? 'max-w-[90rem]' : 'max-w-6xl'}`}>
         {tab === 'jobs' && <JobsView />}
+        {tab === 'cms' && <CmsView />}
         {tab === 'applications' && <ApplicationsView />}
         {tab === 'networking' && <NetworkingView />}
         {tab === 'profile' && <ProfileView />}
