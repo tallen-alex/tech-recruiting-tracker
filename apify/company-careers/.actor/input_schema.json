@@ -1,0 +1,30 @@
+{
+  "title": "Company careers ingestion",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "runId": { "title": "Tracker run ID", "description": "Unique scrape run identifier created by the Worker.", "type": "string", "editor": "textfield" },
+    "callbackBaseUrl": { "title": "Tracker callback URL", "description": "Public Worker origin that receives result callbacks.", "type": "string", "editor": "textfield" },
+    "callbackToken": { "title": "Callback token", "description": "Per-run HMAC credential for authenticating callbacks.", "type": "string", "editor": "textfield", "isSecret": true },
+    "companies": {
+      "title": "Companies",
+      "description": "Tracked companies and any explicitly configured careers sources.",
+      "type": "array",
+      "editor": "json",
+      "items": { "type": "object" }
+    },
+    "targetingProfile": {
+      "title": "Targeting profile",
+      "description": "Required title, exclusion, seniority, skill, and location rules used before results are persisted.",
+      "type": "object",
+      "editor": "json"
+    },
+    "policy": {
+      "title": "Scan policy",
+      "description": "Optional page, age, time, and eligible-job safety limits.",
+      "type": "object",
+      "editor": "json"
+    }
+  },
+  "required": ["runId", "callbackBaseUrl", "callbackToken", "companies", "targetingProfile"]
+}

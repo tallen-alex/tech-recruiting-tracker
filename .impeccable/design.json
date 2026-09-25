@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-07T21:05:00Z",
+  "title": "Design System: Tech Recruiting Tracker",
+  "extensions": {
+    "colorMeta": {
+      "accent": { "role": "primary", "displayName": "Signal Teal", "canonical": "#0c7a61", "tonalRamp": ["#074637", "#0b745c", "#10a381", "#16dfb1", "#45edc7", "#7df2d8", "#b5f8e8", "#e3fcf7"] },
+      "surface": { "role": "neutral", "displayName": "Paper White", "canonical": "#ffffff", "tonalRamp": ["#ffffff", "#f3f6f4", "#eaf0ec", "#dde5e0", "#c7d3cc", "#5f6f65", "#4a5a51", "#16231c"] },
+      "success": { "role": "semantic", "displayName": "Leaf Green", "canonical": "#127035", "tonalRamp": ["#0b421f", "#126e34", "#199a49", "#22d364", "#4fe386", "#84ebaa", "#b9f4cf", "#e5fbed"] },
+      "warning": { "role": "semantic", "displayName": "Amber-Brown", "canonical": "#93540a", "tonalRamp": ["#482905", "#774408", "#a7600b", "#e58310", "#f2a040", "#f6bd79", "#fad9b3", "#fdf1e2"] },
+      "danger": { "role": "semantic", "displayName": "Warm Red", "canonical": "#c13434", "tonalRamp": ["#3c1010", "#641b1b", "#8d2626", "#c13434", "#d45e5e", "#e18f8f", "#eebfbf", "#f9e7e7"] },
+      "info": { "role": "semantic", "displayName": "Sky Blue", "canonical": "#2761a3", "tonalRamp": ["#0f253e", "#193d67", "#225690", "#2f76c6", "#5a95d8", "#8cb5e3", "#bdd5ef", "#e6eff9"] }
+    },
+    "typographyMeta": {
+      "ui": { "displayName": "UI Sans", "purpose": "All headings, labels, body text, buttons — the single UI voice." },
+      "data": { "displayName": "Data Mono", "purpose": "Numbers, dates, currency, the wordmark. Never prose or headings." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "focus-ring", "value": "outline: 2px solid var(--color-accent); outline-offset: 1-2px", "purpose": "The system's only elevation-like affordance; marks interactive focus, not depth." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Save / confirm actions inside inline add-forms.",
+      "html": "<button class=\"ds-btn-primary\">Save</button>",
+      "css": ".ds-btn-primary { background: #0c7a61; color: #ffffff; padding: 6px 12px; border-radius: 3px; border: none; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: background 0.15s; } .ds-btn-primary:hover { background: #0a6a54; } .ds-btn-primary:focus-visible { outline: 2px solid #0c7a61; outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Secondary actions: Log application, Add contact, Cancel.",
+      "html": "<button class=\"ds-btn-ghost\">+ Log application</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; gap: 6px; background: #f3f6f4; color: #16231c; padding: 6px 10px; border-radius: 3px; border: 1px solid #c7d3cc; font-size: 0.875rem; cursor: pointer; transition: color 0.15s, border-color 0.15s; } .ds-btn-ghost:hover { color: #0c7a61; border-color: #0c7a61; } .ds-btn-ghost:focus-visible { outline: 2px solid #0c7a61; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input-text",
+      "description": "Inline add-form fields (company, title, name, etc).",
+      "html": "<input class=\"ds-input\" placeholder=\"Company\" />",
+      "css": ".ds-input { background: #ffffff; color: #16231c; border: 1px solid #c7d3cc; border-radius: 3px; padding: 6px 8px; font-size: 0.875rem; } .ds-input::placeholder { color: #5f6f65; } .ds-input:focus-visible { outline: 2px solid #0c7a61; }"
+    },
+    {
+      "name": "Status Select + Dot",
+      "kind": "custom",
+      "refersTo": "status-select",
+      "description": "The system's signature control: a semantic-tone dot paired with a native select, used for job status, application stage, and outreach status. Gives at-a-glance color scanning while staying a fully native, keyboard-operable control.",
+      "html": "<div class=\"ds-status\"><span class=\"ds-status-dot ds-status-dot--warning\"></span><select class=\"ds-status-select\"><option>Interviewing</option></select></div>",
+      "css": ".ds-status { display: flex; align-items: center; gap: 6px; } .ds-status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 9999px; flex-shrink: 0; } .ds-status-dot--info { background: #2761a3; } .ds-status-dot--warning { background: #93540a; } .ds-status-dot--success { background: #127035; } .ds-status-dot--danger { background: #c13434; } .ds-status-dot--neutral { background: #5f6f65; } .ds-status-select { background: #f3f6f4; color: #16231c; border: 1px solid #c7d3cc; border-radius: 3px; padding: 4px 6px; font-size: 0.75rem; } .ds-status-select:focus-visible { outline: 2px solid #0c7a61; }"
+    },
+    {
+      "name": "Data Table",
+      "kind": "custom",
+      "refersTo": "data-table",
+      "description": "Primary content pattern for all three views (Jobs, Applications, Networking). Dense rows, monospace data columns, hairline dividers, full-row hover.",
+      "html": "<div class=\"ds-table-wrap\"><table class=\"ds-table\"><thead><tr><th>Company</th><th>Title</th></tr></thead><tbody><tr><td>Anthropic</td><td>Software Engineer</td></tr></tbody></table></div>",
+      "css": ".ds-table-wrap { overflow-x: auto; border: 1px solid #dde5e0; border-radius: 6px; } .ds-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.875rem; } .ds-table thead tr { background: #f3f6f4; border-bottom: 1px solid #dde5e0; } .ds-table th { padding: 8px 12px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: #5f6f65; font-weight: 500; } .ds-table td { padding: 10px 12px; color: #16231c; border-bottom: 1px solid #dde5e0; } .ds-table tbody tr:last-child td { border-bottom: none; } .ds-table tbody tr:hover { background: #f3f6f4; }"
+    },
+    {
+      "name": "Empty State",
+      "kind": "custom",
+      "refersTo": "empty-state",
+      "description": "Dashed-border box shown when a table has zero rows. Copy always explains what will populate the view and why it's empty now.",
+      "html": "<div class=\"ds-empty\"><p class=\"ds-empty-title\">No jobs yet</p><p class=\"ds-empty-desc\">Nothing's been scraped yet.</p></div>",
+      "css": ".ds-empty { border: 1px dashed #c7d3cc; border-radius: 6px; padding: 48px 24px; text-align: center; } .ds-empty-title { color: #16231c; font-size: 0.875rem; font-weight: 500; margin: 0; } .ds-empty-desc { color: #4a5a51; font-size: 0.875rem; margin: 4px auto 0; max-width: 28rem; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Personal ATS",
+    "overview": "Every applicant tracking system Tallen has ever used belonged to someone else — a recruiter, a company, a hiring pipeline he could only see from the outside. This system flips that: it's his own ops console, built in the visual grammar of the internal tools engineers already run daily (k9s, lazygit, Grafana-style dashboards) fused with the pipeline/status vocabulary of the ATS software he's used to being tracked by. It shipped dark first, but that read as a grind — a night-shift terminal, not a search that's actually going somewhere. It was rebuilt light and fresh on direct correction: white ground, a single growth-green accent, dense information without the weight of a dark ops room. The instrument-panel structure (tables, monospace data, tone-dot status controls) stayed; only the mood changed, from night shift to moving forward. Nothing here is decorative. The system still answers the same original brief — functional over decorative, scan speed over visual flourish, no vibe-coded showpiece — now paired with an explicit ask for a light, positive feel.",
+    "keyCharacteristics": [
+      "White ground with soft green-tinted neutrals and a single teal-green accent, never a palette of competing colors.",
+      "Monospace reserved strictly for data — numbers, dates, the wordmark — never for prose or headings.",
+      "Flat by construction: hairline borders do the separating job shadows would do elsewhere.",
+      "Dense tabular rows are the primary content pattern, not cards."
+    ],
+    "rules": [
+      { "name": "The One Accent Rule", "body": "Teal appears only on the active tab underline, primary buttons, focus rings, and text links on hover. It never appears twice in the same control for two different reasons, and it is never used just to add color to a screen that has none.", "section": "colors" },
+      { "name": "The Muted-Background Rule", "body": "Every semantic color gets a corresponding -muted background token for badges/dots' containing chrome. Never place a full-saturation semantic color as a fill behind body text — only as text, dot, or border-accent color.", "section": "colors" },
+      { "name": "The Retune, Not Relighten Rule", "body": "When adapting this palette to a different ground (light↔dark), never just invert lightness on the existing hues — re-derive each saturated color against the new background until it clears 4.5:1 again. A color that read fine on near-black can fail badly on white at the same hue/saturation.", "section": "colors" },
+      { "name": "The Data-Only Mono Rule", "body": "Monospace never appears in a heading, a button label, or a paragraph of prose. If it isn't a number, a date, or the wordmark, it's set in the sans.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "Surfaces are flat at rest. If two regions need visual separation, reach for a border or a background-layer step before reaching for a shadow — shadows are not part of this system's vocabulary at all right now.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep monospace scoped to data and the wordmark — never prose, headings, or button labels.",
+      "Do pair every status-changing control with a semantic-tone dot so tables stay scannable without reading every cell.",
+      "Do use the accent color only for the active tab, primary buttons, focus rings, and current-selection state — nothing else.",
+      "Do keep tables flat with hairline borders; reach for a border before a shadow.",
+      "Do write empty-state copy that explains what will populate the view, not just that it's empty.",
+      "Do re-derive contrast whenever a token changes ground (light↔dark)."
+    ],
+    "donts": [
+      "Don't introduce a second accent color or a display/brand typeface — this is an Operate surface, not a marketing one.",
+      "Don't add drop shadows, glassmorphism, or gradient fills anywhere in this system; it has committed to flat.",
+      "Don't round any element past 6px (rounded-lg) — the sharp-cornered, precision-instrument language is load-bearing for the ops console identity.",
+      "Don't replace the native <select> status controls with a custom dropdown component; the plain-native-control choice is deliberate.",
+      "Don't seed fake/demo data into a real table to make a view look populated — every empty state ships true-empty by design until the corresponding data source actually exists."
+    ]
+  }
+}

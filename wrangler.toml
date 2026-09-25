@@ -1,0 +1,18 @@
+name = "tech-recruiting-tracker"
+main = "src/index.ts"
+compatibility_date = "2026-08-07"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "tech-recruiting-tracker"
+database_id = "5e3aaf0e-1f6e-4044-890c-1bafde722310"
+
+[assets]
+directory = "./frontend/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[[r2_buckets]]
+binding = "RESUMES"
+bucket_name = "tech-recruiting-tracker-resumes"

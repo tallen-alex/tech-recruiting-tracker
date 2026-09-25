@@ -1,0 +1,22 @@
+{
+  "name": "tech-recruiting-company-careers",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node dist/main.js",
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "apify": "^3.4.4",
+    "cheerio": "^1.1.2",
+    "crawlee": "^3.15.3",
+    "playwright": "^1.57.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "typescript": "^6.0.2",
+    "vitest": "^4.0.18"
+  }
+}
