@@ -1,22 +1,15 @@
-import { Fragment, useCallback, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { api } from '../lib/api'
 import { useResource } from '../lib/useResource'
 import { EmptyState } from '../components/EmptyState'
-import { ChevronDownIcon, ExternalLinkIcon } from '../components/icons'
-import { StatusDot, type Tone } from '../components/StatusBadge'
+import { ChevronDownIcon } from '../components/icons'
 import { DeadlineAlerts } from '../components/DeadlineAlerts'
-import { ExperienceCell, RequirementsRow, RequirementsToggle } from '../components/JobRequirements'
-import { formatDate } from '../lib/format'
+import { JobSplitView } from '../components/JobSplitView'
+import { useJobSelection } from '../lib/useJobSelection'
 import { CMS_SOURCE } from '../lib/constants'
-import type { Job } from '../types'
 
-const STATUS_TONE: Record<string, Tone> = { new: 'info', reviewing: 'warning', applied: 'success', skipped: 'neutral' }
 const controlClass =
   'rounded-sm border border-border-strong bg-surface px-2 py-1.5 text-sm text-text focus-visible:outline-2 focus-visible:outline-accent'
-
-function toneFor(status: string): Tone {
-  return STATUS_TONE[status] ?? 'neutral'
-}
 
 /**
  * The bookmarklet only bootstraps: it injects cms-sync.js from this origin, which holds the real logic.
@@ -30,12 +23,6 @@ type SortBy = 'relevance' | 'recent'
 type SponsorshipFilter = 'all' | 'open' | 'sponsored' | 'not_sponsored' | 'unclear'
 
 const SYNC_COLLAPSED_KEY = 'cms.syncCollapsed'
-
-const SPONSORSHIP_LABEL: Record<string, { label: string; className: string }> = {
-  sponsored: { label: 'Sponsors', className: 'border-success/30 bg-success-muted text-success' },
-  not_sponsored: { label: 'No sponsorship', className: 'border-danger/30 bg-danger-muted text-danger' },
-  unclear: { label: 'Not stated', className: 'border-border-strong bg-panel-raised text-text-secondary' },
-}
 
 export function CmsView() {
   const [sortBy, setSortBy] = useState<SortBy>('relevance')
@@ -67,37 +54,7 @@ export function CmsView() {
     [sortBy, page, sponsorship],
   )
   const { state, reload, setState } = useResource(fetcher)
-  const [expanded, setExpanded] = useState<Set<number>>(() => new Set())
-  const toggleExpanded = (id: number) =>
-    setExpanded((current) => {
-      const next = new Set(current)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-
-  const mirrorJob = (job: Job) =>
-    setState((previous) =>
-      previous.status === 'ready'
-        ? { status: 'ready', data: { ...previous.data, items: previous.data.items.map((item) => (item.id === job.id ? { ...item, status: job.status } : item)) } }
-        : previous,
-    )
-
-  const setStatus = async (job: Job, status: string) => {
-    setState((previous) =>
-      previous.status === 'ready'
-        ? {
-            status: 'ready',
-            data: { ...previous.data, items: previous.data.items.map((item) => (item.id === job.id ? { ...item, status } : item)) },
-          }
-        : previous,
-    )
-    try {
-      await api.jobs.update(job.id, { status })
-    } catch {
-      reload()
-    }
-  }
+  const { selected, select, setStatus } = useJobSelection(state, setState, reload)
 
   const copyBookmarklet = async () => {
     try {
@@ -200,7 +157,7 @@ export function CmsView() {
         )}
       </section>
 
-      <DeadlineAlerts onJobUpdated={mirrorJob} />
+      <DeadlineAlerts onSelect={select} />
 
       {state.status === 'loading' && (
         <div className="animate-pulse space-y-1.5" role="status" aria-label="Loading">
@@ -228,124 +185,14 @@ export function CmsView() {
 
       {state.status === 'ready' && state.data.items.length > 0 && (
         <>
-          <div className="overflow-x-auto rounded-md border border-border">
-            <table className="w-full min-w-[1120px] border-collapse text-left text-sm">
-              <thead>
-                <tr className="border-b border-border bg-panel text-xs uppercase tracking-wide text-text-faint">
-                  <th className="px-3 py-2 font-medium">Company</th>
-                  <th className="px-3 py-2 font-medium">Title</th>
-                  <th className="px-3 py-2 font-medium">Location</th>
-                  <th className="px-3 py-2 font-medium">Experience</th>
-                  <th className="px-3 py-2 font-medium">Sponsorship</th>
-                  <th className="px-3 py-2 text-right font-medium">Match</th>
-                  <th className="px-3 py-2 font-medium">Posted</th>
-                  <th className="px-3 py-2 font-medium">Deadline</th>
-                  <th className="px-3 py-2 font-medium">Status</th>
-                  <th className="px-3 py-2 font-medium" />
-                </tr>
-              </thead>
-              <tbody>
-                {state.data.items.map((job) => {
-                  const score = job.match_score ?? job.ranking_score
-                  const reason = job.match_reason ?? job.ranking_reason
-                  const open = expanded.has(job.id)
-                  return (
-                    <Fragment key={job.id}>
-                    <tr className={`border-b border-border align-top transition-colors last:border-0 hover:bg-panel ${open ? 'bg-panel' : ''}`}>
-                      <td className="px-3 py-3 font-medium text-text">
-                        <span className="flex items-center gap-2">
-                          {job.company_logo_url && (
-                            <img
-                              src={job.company_logo_url}
-                              alt=""
-                              loading="lazy"
-                              decoding="async"
-                              // Source files are full-resolution (some over 1700px square), so they are
-                              // constrained hard here and lazy-loaded rather than proxied or resized.
-                              className="h-5 w-5 shrink-0 rounded-sm object-contain"
-                              onError={(event) => {
-                                event.currentTarget.style.display = 'none'
-                              }}
-                            />
-                          )}
-                          <span className="truncate" title={job.company_name}>
-                            {job.company_name}
-                          </span>
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-text">
-                        <span className="line-clamp-2 font-medium leading-5" title={job.title}>
-                          {job.title}
-                        </span>
-                        <RequirementsToggle job={job} open={open} onToggle={() => toggleExpanded(job.id)} />
-                      </td>
-                      <td className="px-3 py-3 leading-5 text-text-secondary">
-                        <span className="line-clamp-2">{job.location ?? '—'}</span>
-                      </td>
-                      <td className="px-3 py-3">
-                        <ExperienceCell experience={job.experience} />
-                      </td>
-                      <td className="px-3 py-3">
-                        {(() => {
-                          const key = job.sponsorship ?? 'unclear'
-                          const badge = SPONSORSHIP_LABEL[key] ?? SPONSORSHIP_LABEL.unclear
-                          return (
-                            <span
-                              className={`inline-flex items-center rounded-sm border px-1.5 py-0.5 text-xs leading-none ${badge.className}`}
-                              // Evidence is the matched wording from the posting, so a verdict is always checkable.
-                              title={job.sponsorship_evidence ?? 'The posting does not mention sponsorship either way.'}
-                            >
-                              {badge.label}
-                            </span>
-                          )
-                        })()}
-                      </td>
-                      <td className="px-3 py-3 text-right" title={reason ?? undefined}>
-                        <span className="block font-mono text-text">{score != null ? `${Math.round(score)}%` : '—'}</span>
-                        {score != null && (
-                          <span className="text-xs text-text-faint">{job.match_score != null ? 'Detailed' : 'Estimated'}</span>
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-3 font-mono text-text-secondary">{formatDate(job.posted_at)}</td>
-                      <td className="whitespace-nowrap px-3 py-3 font-mono text-text-secondary">{formatDate(job.deadline)}</td>
-                      <td className="px-3 py-3">
-                        <div className="flex items-center gap-1.5">
-                          <StatusDot tone={toneFor(job.status)} />
-                          <select
-                            aria-label={`Pipeline status for ${job.title}`}
-                            value={job.status}
-                            onChange={(event) => setStatus(job, event.target.value)}
-                            className="min-w-0 rounded-sm border border-border-strong bg-panel px-1.5 py-1 text-xs text-text focus-visible:outline-2 focus-visible:outline-accent"
-                          >
-                            {['new', 'reviewing', 'applied', 'skipped'].map((status) => (
-                              <option key={status} value={status}>
-                                {status}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </td>
-                      <td className="px-2 py-3 text-right">
-                        {job.url && (
-                          <a
-                            href={job.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-sm text-text-faint hover:bg-accent-muted hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
-                            aria-label={`Open ${job.title} at ${job.company_name} on the CMS board`}
-                          >
-                            <ExternalLinkIcon />
-                          </a>
-                        )}
-                      </td>
-                    </tr>
-                    {open && <RequirementsRow job={job} colSpan={10} />}
-                    </Fragment>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          <JobSplitView
+            jobs={state.data.items}
+            selected={selected}
+            onSelect={select}
+            onStatusChange={setStatus}
+            showSponsorship
+            missingDescriptionHint="Full details haven't been fetched for this posting yet. Each sync pulls descriptions for the 60 best-matching postings that don't have one."
+          />
 
           <div className="mt-3 flex items-center justify-between text-sm text-text-secondary">
             <span>

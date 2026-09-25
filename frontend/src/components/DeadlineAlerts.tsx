@@ -1,15 +1,15 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { useResource } from '../lib/useResource'
 import { formatDateTime } from '../lib/format'
 import { CMS_SOURCE } from '../lib/constants'
 import { ChevronDownIcon, ExternalLinkIcon } from './icons'
 import { ExperienceCell } from './JobRequirements'
+import { JOB_STATUSES, announceJobStatus, onJobStatus, daysUntil, dueAt, dueLabel, isDateOnly, urgencyClass } from '../lib/jobs'
 import type { Job } from '../types'
 
 const WINDOW_DAYS = 7
 const COLLAPSED_COUNT = 5
-const STATUSES = ['new', 'reviewing', 'applied', 'skipped'] as const
 /** Marking a posting as either of these takes it off the alert list — it no longer needs action. */
 const RESOLVED = new Set<string>(['applied', 'skipped'])
 /** Shared by the Jobs and CMS pages, so collapsing it on one collapses it on both. */
@@ -24,45 +24,27 @@ function readCollapsed(): boolean {
 }
 
 /**
- * Deadlines are naive UTC ("2026-09-30T05:00:00") or date-only. A date-only deadline is treated as the
- * end of that local day, since "due Sep 30" means you can still apply on the 30th.
- */
-function dueAt(deadline: string): Date | null {
-  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(deadline)
-  const hasOffset = /T.*(Z|[+-]\d{2}:?\d{2})$/.test(deadline)
-  const d = dateOnly ? new Date(`${deadline}T23:59:59`) : hasOffset ? new Date(deadline) : new Date(`${deadline.replace(' ', 'T')}Z`)
-  return Number.isNaN(d.getTime()) ? null : d
-}
-
-/** Whole local calendar days from today to the due date: 0 = today, 1 = tomorrow. */
-function daysUntil(due: Date, now: Date): number {
-  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
-  return Math.round((startOf(due) - startOf(now)) / 86_400_000)
-}
-
-function dueLabel(due: Date, days: number, dateOnly: boolean): string {
-  const time = dateOnly ? '' : `, ${due.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`
-  if (days <= 0) return `Today${time}`
-  if (days === 1) return `Tomorrow${time}`
-  return `${days} days · ${due.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}`
-}
-
-function urgencyClass(days: number): string {
-  if (days <= 1) return 'border-danger/30 bg-danger-muted text-danger'
-  if (days <= 3) return 'border-warning/30 bg-warning-muted text-warning'
-  return 'border-border-strong bg-panel-raised text-text-secondary'
-}
-
-/**
  * "Closing soon" list across every source: active postings whose deadline falls in the next week and
- * that haven't been marked applied or skipped. `onJobUpdated` lets the page's own table mirror a status
- * change made here.
+ * that haven't been marked applied or skipped. Status edits are broadcast, so the page's own list and
+ * this one stay in step; `onSelect` opens a posting in the page's detail pane.
  */
-export function DeadlineAlerts({ onJobUpdated }: { onJobUpdated?: (job: Job) => void }) {
+export function DeadlineAlerts({ onSelect }: { onSelect?: (job: Job) => void }) {
   const fetcher = useCallback(() => api.jobs.deadlines(WINDOW_DAYS), [])
   const { state, reload, setState } = useResource(fetcher)
   const [showAll, setShowAll] = useState(false)
   const [collapsed, setCollapsed] = useState(readCollapsed)
+
+  // Mirror status changes made elsewhere on the page (the list or the detail pane).
+  useEffect(
+    () =>
+      onJobStatus((id, status) =>
+        setState((prev) =>
+          prev.status === 'ready' ? { status: 'ready', data: { ...prev.data, items: prev.data.items.map((item) => (item.id === id ? { ...item, status } : item)) } } : prev,
+        ),
+      ),
+    [setState],
+  )
+
 
   const toggleCollapsed = () =>
     setCollapsed((current) => {
@@ -89,16 +71,13 @@ export function DeadlineAlerts({ onJobUpdated }: { onJobUpdated?: (job: Job) => 
 
   const now = new Date()
   const upcoming = state.data.items
-    .map((job) => ({ job, due: job.deadline ? dueAt(job.deadline) : null }))
+    .map((job) => ({ job, due: dueAt(job.deadline) }))
     .filter((entry): entry is { job: Job; due: Date } => entry.due !== null && entry.due.getTime() >= now.getTime())
     .map((entry) => ({ ...entry, days: daysUntil(entry.due, now) }))
     .filter((entry) => entry.days <= WINDOW_DAYS && !RESOLVED.has(entry.job.status))
 
   const setStatus = async (job: Job, status: string) => {
-    setState((prev) =>
-      prev.status === 'ready' ? { status: 'ready', data: { ...prev.data, items: prev.data.items.map((item) => (item.id === job.id ? { ...item, status } : item)) } } : prev,
-    )
-    onJobUpdated?.({ ...job, status })
+    announceJobStatus(job.id, status)
     try {
       await api.jobs.update(job.id, { status })
     } catch {
@@ -143,12 +122,23 @@ export function DeadlineAlerts({ onJobUpdated }: { onJobUpdated?: (job: Job) => 
                 className={`inline-flex w-44 shrink-0 items-center rounded-sm border px-1.5 py-0.5 text-xs ${urgencyClass(days)}`}
                 title={`Deadline: ${formatDateTime(job.deadline)}`}
               >
-                {dueLabel(due, days, /^\d{4}-\d{2}-\d{2}$/.test(job.deadline ?? ''))}
+                {dueLabel(due, days, isDateOnly(job.deadline))}
               </span>
               <span className="min-w-0 flex-1 basis-64">
-                <span className="block truncate text-sm font-medium text-text" title={job.title}>
-                  {job.title}
-                </span>
+                {onSelect ? (
+                  <button
+                    type="button"
+                    onClick={() => onSelect(job)}
+                    className="block max-w-full truncate rounded-sm text-left text-sm font-medium text-text hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
+                    title={`Show details for ${job.title}`}
+                  >
+                    {job.title}
+                  </button>
+                ) : (
+                  <span className="block truncate text-sm font-medium text-text" title={job.title}>
+                    {job.title}
+                  </span>
+                )}
                 <span className="block truncate text-xs text-text-secondary">
                   {job.company_name}
                   {job.source === CMS_SOURCE && <span className="text-text-faint"> · CMS board</span>}
@@ -166,7 +156,7 @@ export function DeadlineAlerts({ onJobUpdated }: { onJobUpdated?: (job: Job) => 
                 onChange={(event) => setStatus(job, event.target.value)}
                 className="rounded-sm border border-border-strong bg-panel px-1.5 py-1 text-xs text-text focus-visible:outline-2 focus-visible:outline-accent"
               >
-                {STATUSES.map((status) => (
+                {JOB_STATUSES.map((status) => (
                   <option key={status} value={status}>
                     {status}
                   </option>

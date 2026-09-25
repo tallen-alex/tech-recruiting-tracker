@@ -1,26 +1,13 @@
-import { Fragment, useCallback, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { api } from '../lib/api'
 import { useResource } from '../lib/useResource'
 import { EmptyState } from '../components/EmptyState'
-import { ExternalLinkIcon } from '../components/icons'
-import { StatusDot, type Tone } from '../components/StatusBadge'
 import { DeadlineAlerts } from '../components/DeadlineAlerts'
-import { ExperienceCell, RequirementsRow, RequirementsToggle } from '../components/JobRequirements'
-import { formatDate } from '../lib/format'
+import { JobSplitView } from '../components/JobSplitView'
+import { useJobSelection } from '../lib/useJobSelection'
 import { CMS_SOURCE } from '../lib/constants'
-import type { Job } from '../types'
 
-const STATUS_TONE: Record<string, Tone> = { new: 'info', reviewing: 'warning', applied: 'success', skipped: 'neutral' }
 const controlClass = 'rounded-sm border border-border-strong bg-surface px-2 py-1.5 text-sm text-text focus-visible:outline-2 focus-visible:outline-accent'
-
-function toneFor(status: string): Tone { return STATUS_TONE[status] ?? 'neutral' }
-
-function formatSalary(job: Job) {
-  if (!job.salary_min && !job.salary_max) return '—'
-  const fmt = (value: number) => `$${Math.round(value / 1000)}k`
-  if (job.salary_min && job.salary_max) return `${fmt(job.salary_min)}–${fmt(job.salary_max)}`
-  return fmt(job.salary_min ?? job.salary_max!)
-}
 
 type SortBy = 'recent' | 'relevance'
 type ActiveFilter = 'true' | 'false' | 'all'
@@ -34,26 +21,7 @@ export function JobsView() {
   // CMS board postings live in their own tab; thousands of them would bury the tracked-company feed.
   const fetcher = useCallback(() => api.jobs.list({ active: activeFilter, sort: sortBy, search: query, page, pageSize: 50, excludeSource: CMS_SOURCE }), [activeFilter, sortBy, query, page])
   const { state, reload, setState } = useResource(fetcher)
-  const [expanded, setExpanded] = useState<Set<number>>(() => new Set())
-  const toggleExpanded = (id: number) =>
-    setExpanded((current) => {
-      const next = new Set(current)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  const mirrorJob = (job: Job) =>
-    setState((previous) => previous.status === 'ready'
-      ? { status: 'ready', data: { ...previous.data, items: previous.data.items.map((item) => item.id === job.id ? { ...item, status: job.status } : item) } }
-      : previous)
-
-  const setStatus = async (job: Job, status: string) => {
-    setState((previous) => previous.status === 'ready'
-      ? { status: 'ready', data: { ...previous.data, items: previous.data.items.map((item) => item.id === job.id ? { ...item, status } : item) } }
-      : previous)
-    try { await api.jobs.update(job.id, { status }) }
-    catch { reload() }
-  }
+  const { selected, select, setStatus } = useJobSelection(state, setState, reload)
 
   const totalPages = state.status === 'ready' ? Math.max(1, Math.ceil(state.data.total / state.data.pageSize)) : 1
 
@@ -71,7 +39,7 @@ export function JobsView() {
         </form>
       </div>
 
-      <DeadlineAlerts onJobUpdated={mirrorJob} />
+      <DeadlineAlerts onSelect={select} />
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-sm text-text-secondary">
@@ -95,51 +63,7 @@ export function JobsView() {
       {state.status === 'ready' && state.data.items.length === 0 && <EmptyState title="No jobs match these filters" description="Try another search or posting-state filter. Scraping retains every discovered posting." />}
       {state.status === 'ready' && state.data.items.length > 0 && (
         <>
-          <div className="overflow-x-auto rounded-md border border-border">
-            <table className="w-full min-w-[1280px] table-fixed border-collapse text-left text-sm">
-              <colgroup>
-                <col className="w-[12%]" />
-                <col className="w-[24%]" />
-                <col className="w-[17%]" />
-                <col className="w-[7%]" />
-                <col className="w-[10%]" />
-                <col className="w-[8%]" />
-                <col className="w-[10%]" />
-                <col className="w-[9%]" />
-                <col className="w-[3%]" />
-              </colgroup>
-              <thead><tr className="border-b border-border bg-panel text-xs uppercase tracking-wide text-text-faint">
-                <th className="px-3 py-2 font-medium">Company</th><th className="px-3 py-2 font-medium">Title</th>
-                <th className="px-3 py-2 font-medium">Location</th><th className="px-3 py-2 font-medium">Experience</th><th className="px-3 py-2 font-medium">Compensation</th>
-                <th className="px-3 py-2 text-right font-medium">Match</th><th className="px-3 py-2 font-medium">Posted</th>
-                <th className="px-3 py-2 font-medium">Pipeline</th><th className="px-3 py-2 font-medium"><span className="sr-only">Open posting</span></th>
-              </tr></thead>
-              <tbody>{state.data.items.map((job) => {
-                const score = job.match_score ?? job.ranking_score
-                const reason = job.match_reason ?? job.ranking_reason
-                const open = expanded.has(job.id)
-                return (
-                  <Fragment key={job.id}>
-                  <tr className={`border-b border-border align-top transition-colors last:border-0 hover:bg-panel ${open ? 'bg-panel' : ''}`}>
-                    <td className="truncate px-3 py-3 font-medium text-text" title={job.company_name}>{job.company_name}</td>
-                    <td className="px-3 py-3 text-text"><span className="line-clamp-2 font-medium leading-5" title={job.title}>{job.title}</span>{job.department && <span className="mt-1 block truncate text-xs text-text-faint">{job.department}</span>}<RequirementsToggle job={job} open={open} onToggle={() => toggleExpanded(job.id)} /></td>
-                    <td className="px-3 py-3 leading-5 text-text-secondary"><span className="line-clamp-2" title={[job.location, job.remote].filter(Boolean).join(' · ')}>{job.location ?? '—'}{job.remote ? ` · ${job.remote}` : ''}</span></td>
-                    <td className="px-3 py-3"><ExperienceCell experience={job.experience} /></td>
-                    <td className="whitespace-nowrap px-3 py-3 font-mono text-text-secondary">{formatSalary(job)}</td>
-                    <td className="px-3 py-2.5 text-right" title={reason ?? undefined}>
-                      <span className="block font-mono text-text">{score != null ? `${Math.round(score)}%` : '—'}</span>
-                      {score != null && <span className="text-xs text-text-faint">{job.match_score != null ? 'Detailed' : 'Estimated'}</span>}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-3 text-text-secondary"><span className="font-mono">{formatDate(job.posted_at)}</span><span className="mt-1 block text-xs text-text-faint">{job.is_active ? 'Active' : 'Inactive'}</span></td>
-                    <td className="px-3 py-2.5"><div className="flex items-center gap-1.5"><StatusDot tone={toneFor(job.status)} /><select aria-label={`Pipeline status for ${job.title}`} value={job.status} onChange={(event) => setStatus(job, event.target.value)} className="min-w-0 rounded-sm border border-border-strong bg-panel px-1.5 py-1 text-xs text-text focus-visible:outline-2 focus-visible:outline-accent">{['new', 'reviewing', 'applied', 'skipped'].map((status) => <option key={status} value={status}>{status}</option>)}</select></div></td>
-                    <td className="px-2 py-2.5 text-right">{job.url && <a href={job.url} target="_blank" rel="noreferrer" className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-sm text-text-faint hover:bg-accent-muted hover:text-accent focus-visible:outline-2 focus-visible:outline-accent" aria-label={`Open posting for ${job.title} at ${job.company_name}`}><ExternalLinkIcon /></a>}</td>
-                  </tr>
-                  {open && <RequirementsRow job={job} colSpan={9} />}
-                  </Fragment>
-                )
-              })}</tbody>
-            </table>
-          </div>
+          <JobSplitView jobs={state.data.items} selected={selected} onSelect={select} onStatusChange={setStatus} />
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-text-secondary">
             <span>{state.data.total.toLocaleString()} posting{state.data.total === 1 ? '' : 's'} · Page {state.data.page} of {totalPages}</span>
             <div className="flex gap-2"><button type="button" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))} className="rounded-sm border border-border-strong bg-panel px-2.5 py-1.5 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-accent">Previous</button><button type="button" disabled={page >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))} className="rounded-sm border border-border-strong bg-panel px-2.5 py-1.5 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-accent">Next</button></div>
